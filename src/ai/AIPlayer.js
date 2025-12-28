@@ -3,7 +3,7 @@ export default class AIPlayer {
         this.scene = scene;
         this.playerNumber = playerNumber; // 2 pentru AI
         this.opponent = playerNumber === 1 ? 2 : 1;
-        this.maxDepth = 3; // Profunzimea arborelui de decizie
+        this.maxDepth = 5; // Profunzimea arborelui de decizie (mai mare = mai inteligent)
     }
     
     // Funcția principală care decide mutarea AI-ului
@@ -42,7 +42,7 @@ export default class AIPlayer {
         return bestPosition;
     }
     
-    // Găsește cea mai bună plasare în faza de placing
+    // Găsește cea mai bună plasare în faza de placing (versiune agresivă)
     findBestPlacement() {
         let bestMove = null;
         let bestScore = -Infinity;
@@ -59,20 +59,32 @@ export default class AIPlayer {
                 // Evaluează poziția
                 let score = this.evaluateBoard(tempBoard);
                 
-                // Bonus pentru formarea unei mori
+                // BONUS MARE pentru formarea unei mori (prioritate maximă!)
                 if (formsMill) {
-                    score += 100;
+                    score += 400; // Crescut de la 100 la 300
+                }
+                
+                // Verifică dacă creează oportunitate de moară dublă
+                const createsDoubleMill = this.createsDoubleMillOpportunity(i);
+                if (createsDoubleMill) {
+                    score += 150; // Nou: prioritizează configurații de moară dublă
                 }
                 
                 // Bonus pentru poziții strategice (colțuri și mijloace)
                 if ([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23].includes(i)) {
-                    score += 10;
+                    score += 15;
                 }
                 
                 // Verifică dacă blochează o moară potențială a adversarului
                 const blocksOpponentMill = this.blocksOpponentMillPotential(i);
                 if (blocksOpponentMill) {
-                    score += 50;
+                    score += 80; // Crescut de la 50 la 80
+                }
+                
+                // Verifică dacă completează o linie cu 2 piese proprii
+                const completesLine = this.completesPotentialMill(i);
+                if (completesLine) {
+                    score += 60; // Nou: prioritizează construirea morilor
                 }
                 
                 if (score > bestScore) {
@@ -128,14 +140,22 @@ export default class AIPlayer {
             
             for (let move of moves) {
                 const newBoard = this.applyMove(board, move);
-                const result = this.minimax(newBoard, depth - 1, alpha, beta, false);
                 
-                if (result.score > maxScore) {
-                    maxScore = result.score;
+                // Bonus imediat pentru mutări care formează mori
+                let moveBonus = 0;
+                if (this.checkMillOnBoard(newBoard, move.to, this.playerNumber)) {
+                    moveBonus = 200; // Bonus mare pentru formarea unei mori
+                }
+                
+                const result = this.minimax(newBoard, depth - 1, alpha, beta, false);
+                const finalScore = result.score + moveBonus;
+                
+                if (finalScore > maxScore) {
+                    maxScore = finalScore;
                     bestMove = move;
                 }
                 
-                alpha = Math.max(alpha, result.score);
+                alpha = Math.max(alpha, finalScore);
                 if (beta <= alpha) {
                     break; // Beta cut-off (alpha-beta pruning)
                 }
@@ -148,14 +168,22 @@ export default class AIPlayer {
             
             for (let move of moves) {
                 const newBoard = this.applyMove(board, move);
-                const result = this.minimax(newBoard, depth - 1, alpha, beta, true);
                 
-                if (result.score < minScore) {
-                    minScore = result.score;
+                // Penalitate pentru adversar dacă formează moară
+                let movePenalty = 0;
+                if (this.checkMillOnBoard(newBoard, move.to, this.opponent)) {
+                    movePenalty = 200;
+                }
+                
+                const result = this.minimax(newBoard, depth - 1, alpha, beta, true);
+                const finalScore = result.score - movePenalty;
+                
+                if (finalScore < minScore) {
+                    minScore = finalScore;
                     bestMove = move;
                 }
                 
-                beta = Math.min(beta, result.score);
+                beta = Math.min(beta, finalScore);
                 if (beta <= alpha) {
                     break; // Alpha cut-off
                 }
@@ -221,31 +249,42 @@ export default class AIPlayer {
         return newBoard;
     }
     
-    // Evaluează starea tablei (funcție de evaluare euristică)
+    // Evaluează starea tablei (funcție de evaluare euristică îmbunătățită)
     evaluateBoard(board) {
         let score = 0;
         
-        // 1. Numărul de piese
+        // 1. Numărul de piese (mai important când adversarul are puține piese)
         const aiPieces = board.filter(p => p === this.playerNumber).length;
         const opponentPieces = board.filter(p => p === this.opponent).length;
-        score += (aiPieces - opponentPieces) * 50;
+        const pieceWeight = opponentPieces <= 4 ? 100 : 50;
+        score += (aiPieces - opponentPieces) * pieceWeight;
         
-        // 2. Numărul de mori formate
+        // 2. Numărul de mori formate (PRIORITATE MAXIMĂ)
         const aiMills = this.countMills(board, this.playerNumber);
         const opponentMills = this.countMills(board, this.opponent);
-        score += (aiMills - opponentMills) * 100;
+        score += (aiMills - opponentMills) * 150; // Crescut de la 100 la 150
         
-        // 3. Mori potențiale (2 din 3 piese pe linie)
+        // 3. Mori potențiale (2 din 3 piese pe linie) - AGRESIV
         const aiPotentialMills = this.countPotentialMills(board, this.playerNumber);
         const opponentPotentialMills = this.countPotentialMills(board, this.opponent);
-        score += (aiPotentialMills - opponentPotentialMills) * 30;
+        score += (aiPotentialMills - opponentPotentialMills) * 50; // Crescut de la 35 la 50
         
-        // 4. Mobilitate (numărul de mutări posibile)
+        // 4. Mori duble potențiale (o piesă poate completa 2 mori) - FOARTE VALOROS
+        const aiDoubleMills = this.countDoubleMillPotential(board, this.playerNumber);
+        const opponentDoubleMills = this.countDoubleMillPotential(board, this.opponent);
+        score += (aiDoubleMills - opponentDoubleMills) * 100; // Crescut de la 60 la 100
+        
+        // 5. Mobilitate (numărul de mutări posibile)
         const aiMobility = this.getAllPossibleMoves(board, this.playerNumber).length;
         const opponentMobility = this.getAllPossibleMoves(board, this.opponent).length;
-        score += (aiMobility - opponentMobility) * 10;
+        score += (aiMobility - opponentMobility) * 12;
         
-        // 5. Poziții strategice ocupate
+        // 6. Blocarea mobilității adversarului
+        if (opponentMobility === 0 && opponentPieces > 3) {
+            score += 500; // Adversarul nu poate muta = victorie iminentă
+        }
+        
+        // 7. Poziții strategice ocupate (colțuri și mijloace)
         const strategicPositions = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23];
         let aiStrategic = 0;
         let opponentStrategic = 0;
@@ -255,7 +294,17 @@ export default class AIPlayer {
             if (board[pos] === this.opponent) opponentStrategic++;
         }
         
-        score += (aiStrategic - opponentStrategic) * 15;
+        score += (aiStrategic - opponentStrategic) * 18;
+        
+        // 8. Configurații de piese (piese pe același pătrat)
+        const aiConfigurations = this.evaluateConfigurations(board, this.playerNumber);
+        const opponentConfigurations = this.evaluateConfigurations(board, this.opponent);
+        score += (aiConfigurations - opponentConfigurations) * 8;
+        
+        // 9. Bonus pentru closing (când adversarul are 3 piese)
+        if (opponentPieces === 3 && aiPieces > 3) {
+            score += 200; // Avantaj major
+        }
         
         return score;
     }
@@ -327,6 +376,54 @@ export default class AIPlayer {
         return false;
     }
     
+    // Verifică dacă o poziție creează oportunitate de moară dublă
+    createsDoubleMillOpportunity(position) {
+        let potentialMills = 0;
+        
+        for (let mill of this.scene.mills) {
+            if (mill.includes(position)) {
+                const pieces = [
+                    this.scene.board[mill[0]],
+                    this.scene.board[mill[1]],
+                    this.scene.board[mill[2]]
+                ];
+                
+                const myPieces = pieces.filter(p => p === this.playerNumber).length;
+                const emptySpots = pieces.filter(p => p === 0).length;
+                
+                // Dacă am deja o piesă și sunt 2 spații goale
+                if (myPieces === 1 && emptySpots === 2) {
+                    potentialMills++;
+                }
+            }
+        }
+        
+        // Dacă poziția participă în 2+ linii potențiale
+        return potentialMills >= 2;
+    }
+    
+    // Verifică dacă poziția completează o linie cu 2 piese proprii
+    completesPotentialMill(position) {
+        for (let mill of this.scene.mills) {
+            if (mill.includes(position)) {
+                const pieces = [
+                    this.scene.board[mill[0]],
+                    this.scene.board[mill[1]],
+                    this.scene.board[mill[2]]
+                ];
+                
+                const myPieces = pieces.filter(p => p === this.playerNumber).length;
+                const emptySpots = pieces.filter(p => p === 0).length;
+                
+                // Am 2 piese și un spațiu gol (linia mea va avea 3 piese)
+                if (myPieces === 2 && emptySpots === 1) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
     // Evaluează importanța unei poziții pentru eliminare
     evaluatePositionImportance(position, board) {
         let score = 0;
@@ -346,6 +443,57 @@ export default class AIPlayer {
         // Preferă poziții strategice
         if ([1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23].includes(position)) {
             score += 20;
+        }
+        
+        return score;
+    }
+    
+    // Numără potențialul de mori duble (o mișcare poate completa 2 mori)
+    countDoubleMillPotential(board, player) {
+        let count = 0;
+        
+        for (let i = 0; i < 24; i++) {
+            if (board[i] === 0) {
+                let millsCompletable = 0;
+                
+                for (let mill of this.scene.mills) {
+                    if (mill.includes(i)) {
+                        const pieces = [board[mill[0]], board[mill[1]], board[mill[2]]];
+                        const playerPieces = pieces.filter(p => p === player).length;
+                        const emptySpots = pieces.filter(p => p === 0).length;
+                        
+                        if (playerPieces === 2 && emptySpots === 1) {
+                            millsCompletable++;
+                        }
+                    }
+                }
+                
+                if (millsCompletable >= 2) {
+                    count++;
+                }
+            }
+        }
+        
+        return count;
+    }
+    
+    // Evaluează configurația pieselor (piese pe același pătrat)
+    evaluateConfigurations(board, player) {
+        let score = 0;
+        
+        // Definește pătratele
+        const squares = [
+            [0, 1, 2, 3, 4, 5, 6, 7],     // Exterior
+            [8, 9, 10, 11, 12, 13, 14, 15], // Mijloc
+            [16, 17, 18, 19, 20, 21, 22, 23] // Interior
+        ];
+        
+        for (let square of squares) {
+            const piecesInSquare = square.filter(pos => board[pos] === player).length;
+            // Bonus pentru a avea multiple piese pe același pătrat
+            if (piecesInSquare >= 3) {
+                score += piecesInSquare * 2;
+            }
         }
         
         return score;
