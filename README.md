@@ -53,8 +53,8 @@ A modern implementation of the classic Nine Men's Morris (Mill Game) built with 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/SimedruF/games.git
-cd games
+git clone https://github.com/SimedruF/nine-mens-morris-game.git
+cd nine-mens-morris-game
 ```
 
 2. Install dependencies:
@@ -99,7 +99,7 @@ The AI evaluates board positions based on:
 ## 📁 Project Structure
 
 ```
-games/
+nine-mens-morris-game/
 ├── index.html              # Main HTML file
 ├── package.json            # Project dependencies
 ├── vite.config.js         # Vite configuration
