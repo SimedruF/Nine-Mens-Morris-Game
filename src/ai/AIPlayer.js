@@ -3,7 +3,7 @@ export default class AIPlayer {
         this.scene = scene;
         this.playerNumber = playerNumber; // 2 pentru AI
         this.opponent = playerNumber === 1 ? 2 : 1;
-        this.maxDepth = 5; // Profunzimea arborelui de decizie (mai mare = mai inteligent)
+        this.maxDepth = 4; // Profunzimea arborelui de decizie (mai mare = mai inteligent)
     }
     
     // Funcția principală care decide mutarea AI-ului

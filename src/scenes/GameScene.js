@@ -4,10 +4,10 @@ export default class GameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameScene' });
         
-        // Constante pentru tabla de joc
-        this.BOARD_SIZE = 600;
-        this.BOARD_OFFSET_X = 200;
-        this.BOARD_OFFSET_Y = 220;
+        // Constante pentru tabla de joc (dimensiune optimă pentru telefon)
+        this.BOARD_SIZE = 540;
+        this.BOARD_OFFSET_X = 130;
+        this.BOARD_OFFSET_Y = 240;
         this.PIECE_RADIUS = 20;
         
         // Starea jocului
@@ -24,6 +24,11 @@ export default class GameScene extends Phaser.Scene {
         this.ai = null;
         this.aiThinking = false;
         
+        // Zoom
+        this.zoomLevel = 1;
+        this.minZoom = 0.7;
+        this.maxZoom = 1.8;
+        
         // Pozițiile pe tablă (coordonate relative)
         this.positions = [];
         this.connections = [];
@@ -35,10 +40,11 @@ export default class GameScene extends Phaser.Scene {
     initializeBoard() {
         // Definim cele 24 de poziții pe tablă (3 pătrate concentrice)
         // Poziții: 0-7 (exterior), 8-15 (mijloc), 16-23 (interior)
+        // Dimensiuni pentru tabla de 540px
         
         const outer = 0;
-        const middle = 200;
-        const inner = 400;
+        const middle = 270;  // 540 / 2
+        const inner = 540;   // dimensiunea totală
         
         // Pătrat exterior (0-7)
         this.positions.push(
@@ -53,9 +59,9 @@ export default class GameScene extends Phaser.Scene {
         );
         
         // Pătrat mijlociu (8-15)
-        const outerM = 67;
-        const middleM = 200;
-        const innerM = 333;
+        const outerM = 90;    // 540 * 1/6
+        const middleM = 270;  // 540 / 2
+        const innerM = 450;   // 540 * 5/6
         
         this.positions.push(
             { x: outerM, y: outerM },      // 8
@@ -69,9 +75,9 @@ export default class GameScene extends Phaser.Scene {
         );
         
         // Pătrat interior (16-23)
-        const outerI = 133;
-        const middleI = 200;
-        const innerI = 267;
+        const outerI = 180;  // 540 * 1/3
+        const middleI = 270; // 540 / 2
+        const innerI = 360;  // 540 * 2/3
         
         this.positions.push(
             { x: outerI, y: outerI },      // 16
@@ -128,19 +134,19 @@ export default class GameScene extends Phaser.Scene {
             fontSize: '36px',
             fontStyle: 'bold',
             color: '#ffffff'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setScrollFactor(0);
         
         // Info jucător curent
         this.playerText = this.add.text(400, 80, '', {
             fontSize: '22px',
             color: '#ffffff'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setScrollFactor(0);
         
         // Info piese rămase
         this.piecesText = this.add.text(400, 110, '', {
             fontSize: '16px',
             color: '#ffffff'
-        }).setOrigin(0.5);
+        }).setOrigin(0.5).setScrollFactor(0);
         
         // Buton înapoi la meniu - plasat jos în colțul stânga
         const backButton = this.add.text(40, 150, '← Menu', {
@@ -148,7 +154,7 @@ export default class GameScene extends Phaser.Scene {
             color: '#ffffff',
             backgroundColor: '#34495e',
             padding: { x: 12, y: 6 }
-        }).setInteractive();
+        }).setInteractive().setScrollFactor(0);
         
         backButton.on('pointerover', () => {
             backButton.setBackgroundColor('#576574');
@@ -164,22 +170,100 @@ export default class GameScene extends Phaser.Scene {
             this.scene.start('MenuScene');
         });
         
+        // Butoane de zoom - plasate lângă butonul de meniu, pe același rând
+        const zoomInButton = this.add.text(160, 150, '+', {
+            fontSize: '24px',
+            color: '#ffffff',
+            backgroundColor: '#27ae60',
+            padding: { x: 10, y: 2 },
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setInteractive().setScrollFactor(0);
+        
+        const zoomOutButton = this.add.text(220, 150, '-', {
+            fontSize: '24px',
+            color: '#ffffff',
+            backgroundColor: '#e74c3c',
+            padding: { x: 12, y: 2 },
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setInteractive().setScrollFactor(0);
+        
+        const zoomResetButton = this.add.text(280, 150, '⟲', {
+            fontSize: '20px',
+            color: '#ffffff',
+            backgroundColor: '#3498db',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(0.5).setInteractive().setScrollFactor(0);
+        
+        zoomInButton.on('pointerover', () => {
+            zoomInButton.setBackgroundColor('#2ecc71');
+            this.game.canvas.style.cursor = 'pointer';
+        });
+        
+        zoomInButton.on('pointerout', () => {
+            zoomInButton.setBackgroundColor('#27ae60');
+            this.game.canvas.style.cursor = 'default';
+        });
+        
+        zoomInButton.on('pointerdown', () => {
+            this.adjustZoom(0.2);
+        });
+        
+        zoomOutButton.on('pointerover', () => {
+            zoomOutButton.setBackgroundColor('#e67e22');
+            this.game.canvas.style.cursor = 'pointer';
+        });
+        
+        zoomOutButton.on('pointerout', () => {
+            zoomOutButton.setBackgroundColor('#e74c3c');
+            this.game.canvas.style.cursor = 'default';
+        });
+        
+        zoomOutButton.on('pointerdown', () => {
+            this.adjustZoom(-0.2);
+        });
+        
+        zoomResetButton.on('pointerover', () => {
+            zoomResetButton.setBackgroundColor('#5dade2');
+            this.game.canvas.style.cursor = 'pointer';
+        });
+        
+        zoomResetButton.on('pointerout', () => {
+            zoomResetButton.setBackgroundColor('#3498db');
+            this.game.canvas.style.cursor = 'default';
+        });
+        
+        zoomResetButton.on('pointerdown', () => {
+            this.resetZoom();
+        });
+        
         this.drawBoard();
         this.updateUI();
         
         // Adăugăm interactivitate
         this.input.on('pointerdown', this.handleClick, this);
+        
+        // Activăm drag pentru a mișca camera când e zoom
+        this.cameras.main.setBounds(-400, -400, 1600, 1600);
+        this.input.on('pointermove', (pointer) => {
+            if (pointer.isDown && this.zoomLevel > 1) {
+                this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.zoomLevel;
+                this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y) / this.zoomLevel;
+            }
+        });
+        
+        // Handler pentru schimbarea dimensiunii/orientării
+        this.scale.on('resize', this.handleResize, this);
     }
     
     drawBoard() {
-        // Background pentru tablă cu gradient
+        // Background pentru tablă cu gradient (ajustat pentru tabla redusă cu 20%)
         const bgGraphics = this.add.graphics();
         bgGraphics.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1);
         bgGraphics.fillRoundedRect(
             this.BOARD_OFFSET_X - 30,
             this.BOARD_OFFSET_Y - 30,
-            460,
-            460,
+            this.BOARD_SIZE + 60,
+            this.BOARD_SIZE + 60,
             10
         );
         
@@ -873,5 +957,21 @@ export default class GameScene extends Phaser.Scene {
             `White: ${this.piecesRemaining[1]} to place, ${this.piecesOnBoard[1]} on board | ` +
             `Black: ${this.piecesRemaining[2]} to place, ${this.piecesOnBoard[2]} on board`
         );
+    }
+    
+    handleResize(gameSize) {
+        // Reset zoom când se schimbă orientarea pentru a preveni deformarea
+        this.resetZoom();
+    }
+    
+    adjustZoom(delta) {
+        this.zoomLevel = Phaser.Math.Clamp(this.zoomLevel + delta, this.minZoom, this.maxZoom);
+        this.cameras.main.setZoom(this.zoomLevel);
+    }
+    
+    resetZoom() {
+        this.zoomLevel = 1;
+        this.cameras.main.setZoom(1);
+        this.cameras.main.centerOn(400, 450);
     }
 }

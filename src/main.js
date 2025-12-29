@@ -4,8 +4,13 @@ import GameScene from './scenes/GameScene.js';
 
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 900,
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 800,
+        height: 900,
+        autoRound: true
+    },
     parent: 'game-container',
     backgroundColor: '#2d3436',
     scene: [MenuScene, GameScene],
